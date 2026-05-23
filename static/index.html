@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookMind — KNN Book Recommender</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ─── Reset & Variables ─────────────────────────────── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --navy:    #021B3A;
+  --navyMid: #065A82;
+  --teal:    #1C7293;
+  --accent:  #02C39A;
+  --accentLt:#d4f5e9;
+  --white:   #FFFFFF;
+  --offWhite:#F0F6FF;
+  --gray:    #64748B;
+  --lightBorder: rgba(2,195,154,0.25);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--offWhite);
+  color: var(--navy);
+  overflow-x: hidden;
+}
+
+/* ─── Noise texture overlay ─────────────────────────── */
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:0;
+}
+
+/* ─── Nav ───────────────────────────────────────────── */
+nav {
+  position: fixed; top:0; left:0; right:0; z-index:100;
+  background: rgba(2,27,58,0.92);
+  backdrop-filter: blur(16px);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2.5rem;
+  height: 64px;
+  border-bottom: 1px solid var(--lightBorder);
+}
+
+.nav-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.5rem;
+  color: var(--white);
+  display: flex; align-items: center; gap: 10px;
+}
+.nav-logo span { color: var(--accent); }
+
+.nav-links { display:flex; gap:2rem; }
+.nav-links a {
+  color: #CADCFC;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--accent); }
+
+/* ─── Hero ──────────────────────────────────────────── */
+.hero {
+  min-height: 100vh;
+  background: linear-gradient(160deg, var(--navy) 0%, #0D3B66 60%, #065A82 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 6rem 2rem 4rem;
+  position: relative; overflow: hidden;
+}
+
+.hero-orb {
+  position:absolute; border-radius:50%;
+  background: radial-gradient(circle, var(--accent), transparent);
+  opacity: 0.07;
+  animation: pulse 6s ease-in-out infinite;
+}
+.hero-orb-1 { width:500px;height:500px; top:-100px; right:-100px; }
+.hero-orb-2 { width:300px;height:300px; bottom:-60px; left:-60px; animation-delay:3s; }
+
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+
+.hero-content {
+  text-align: center; max-width: 780px; z-index:1;
+  animation: fadeUp 0.8s ease both;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+
+.hero-badge {
+  display: inline-block;
+  background: rgba(2,195,154,0.15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.3rem 1rem;
+  border-radius: 50px;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+.hero h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(2.8rem, 7vw, 5rem);
+  color: var(--white);
+  line-height: 1.1;
+  margin-bottom: 1.2rem;
+}
+.hero h1 em { color: var(--accent); font-style: normal; }
+
+.hero p {
+  font-size: 1.15rem;
+  color: #CADCFC;
+  max-width: 560px;
+  margin: 0 auto 2.5rem;
+  line-height: 1.7;
+  font-weight: 300;
+}
+
+.hero-btns { display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; }
+
+.btn {
+  padding: 0.8rem 2rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  text-decoration: none;
+  font-family: 'DM Sans', sans-serif;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--navy);
+}
+.btn-primary:hover { transform:translateY(-3px); box-shadow: 0 10px 30px rgba(2,195,154,0.35); }
+.btn-outline {
+  background: transparent;
+  color: var(--white);
+  border: 1.5px solid rgba(255,255,255,0.3);
+}
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); transform:translateY(-3px); }
+
+/* Stats bar */
+.hero-stats {
+  display: flex; gap: 3rem; justify-content: center; margin-top: 4rem;
+  flex-wrap: wrap;
+}
+.stat { text-align:center; }
+.stat-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--accent);
+  display:block;
+}
+.stat-label { font-size: 0.82rem; color: #CADCFC; text-transform: uppercase; letter-spacing: 0.07em; }
+
+/* ─── Sections ──────────────────────────────────────── */
+section { padding: 6rem 2rem; position:relative; z-index:1; }
+
+.container { max-width: 1100px; margin: 0 auto; }
+
+.section-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.6rem;
+}
+.section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  color: var(--navy);
+  margin-bottom: 1rem;
+}
+.section-sub { color: var(--gray); font-size: 1rem; max-width: 520px; line-height: 1.7; }
+
+/* ─── How It Works ──────────────────────────────────── */
+#how { background: var(--white); }
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1.5rem;
+  margin-top: 3rem;
+}
+
+.step-card {
+  background: var(--offWhite);
+  border-radius: 16px;
+  padding: 1.8rem 1.4rem;
+  border: 1px solid rgba(2,195,154,0.15);
+  transition: all 0.3s;
+  position:relative; overflow:hidden;
+  animation: fadeUp 0.6s ease both;
+}
+.step-card:nth-child(1){animation-delay:0.1s}
+.step-card:nth-child(2){animation-delay:0.2s}
+.step-card:nth-child(3){animation-delay:0.3s}
+.step-card:nth-child(4){animation-delay:0.4s}
+.step-card:nth-child(5){animation-delay:0.5s}
+
+.step-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(2,27,58,0.12);
+  border-color: var(--accent);
+}
+.step-card::before {
+  content: '';
+  position:absolute; top:0; left:0; right:0; height:3px;
+  background: linear-gradient(90deg, var(--accent), var(--teal));
+}
+.step-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--accentLt);
+  line-height:1;
+  margin-bottom: 0.8rem;
+}
+.step-title { font-weight: 700; color: var(--navy); margin-bottom: 0.5rem; font-size: 1rem; }
+.step-desc { font-size: 0.88rem; color: var(--gray); line-height: 1.6; }
+
+/* ─── Models ────────────────────────────────────────── */
+#models { background: var(--offWhite); }
+
+.models-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap:1.5rem; margin-top:3rem; }
+
+.model-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 2rem;
+  border: 1px solid rgba(2,27,58,0.08);
+  box-shadow: 0 4px 24px rgba(2,27,58,0.07);
+  transition: all 0.3s;
+  position:relative; overflow:hidden;
+}
+.model-card:hover { transform:translateY(-8px); box-shadow: 0 24px 48px rgba(2,27,58,0.14); }
+.model-card.best {
+  border-color: var(--accent);
+  box-shadow: 0 4px 24px rgba(2,195,154,0.2);
+}
+.model-badge {
+  position:absolute; top:1rem; right:1rem;
+  background: var(--accent); color: var(--navy);
+  font-size: 0.7rem; font-weight: 700;
+  padding: 0.2rem 0.6rem; border-radius: 20px;
+  text-transform: uppercase; letter-spacing:0.05em;
+}
+.model-icon { font-size: 2.5rem; margin-bottom:1rem; }
+.model-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.4rem;
+  color: var(--navy);
+  margin-bottom: 0.5rem;
+}
+.model-desc { color: var(--gray); font-size: 0.9rem; line-height:1.6; margin-bottom:1.2rem; }
+.model-metrics { display:flex; gap:1rem; }
+.metric-pill {
+  background: var(--offWhite);
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.82rem;
+  font-family: 'DM Mono', monospace;
+}
+.metric-pill strong { color: var(--navyMid); display:block; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; }
+.metric-pill span { color: var(--accent); font-weight: 600; }
+
+/* ─── Demo Section ──────────────────────────────────── */
+#demo { background: linear-gradient(160deg, var(--navy) 0%, #0D3B66 100%); color: white; }
+#demo .section-title { color: white; }
+#demo .section-sub { color: #CADCFC; }
+
+.demo-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(2,195,154,0.2);
+  border-radius: 24px;
+  padding: 2.5rem;
+  backdrop-filter: blur(10px);
+  margin-top: 3rem;
+}
+
+.demo-tabs { display:flex; gap:0.5rem; margin-bottom:2rem; flex-wrap:wrap; }
+.tab-btn {
+  padding: 0.55rem 1.2rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: #CADCFC;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+.tab-btn.active, .tab-btn:hover {
+  background: var(--accent);
+  color: var(--navy);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.tab-content { display:none; }
+.tab-content.active { display:block; animation: fadeUp 0.3s ease; }
+
+.demo-input-row { display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.5rem; }
+
+.demo-field { display:flex; flex-direction:column; gap:0.4rem; flex:1; min-width:140px; }
+.demo-field label { font-size:0.8rem; color: var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; }
+.demo-field input, .demo-field select {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: white;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  outline:none;
+  transition: border-color 0.2s;
+}
+.demo-field input:focus, .demo-field select:focus { border-color: var(--accent); }
+.demo-field select option { background: var(--navy); }
+
+.run-btn {
+  background: var(--accent);
+  color: var(--navy);
+  border: none;
+  padding: 0.65rem 2rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.run-btn:hover { transform:translateY(-2px); box-shadow: 0 8px 24px rgba(2,195,154,0.35); }
+
+.results-area {
+  background: rgba(0,0,0,0.2);
+  border-radius: 14px;
+  padding: 1.5rem;
+  min-height: 120px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.88rem;
+  color: #CADCFC;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.result-row {
+  display:flex; align-items:center; gap:12px;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  animation: fadeUp 0.3s ease both;
+}
+.result-row:last-child { border-bottom:none; }
+.result-rank {
+  background: linear-gradient(135deg, var(--accent), var(--teal));
+  color: var(--navy);
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:0.78rem; flex-shrink:0;
+}
+.result-title { flex:1; color:white; font-family:'DM Sans',sans-serif; font-size:0.9rem; }
+.result-score { color: var(--accent); font-weight:700; font-size:0.88rem; }
+
+.loading { display:none; text-align:center; padding:2rem; color: #CADCFC; }
+.loading.show { display:block; }
+.spinner {
+  display:inline-block; width:28px; height:28px;
+  border:3px solid rgba(2,195,154,0.2);
+  border-top-color: var(--accent);
+  border-radius:50%;
+  animation: spin 0.7s linear infinite;
+  margin-bottom:0.5rem;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ─── Chart Section ─────────────────────────────────── */
+#comparison { background: var(--white); }
+
+.chart-wrapper {
+  background: var(--offWhite);
+  border-radius: 20px;
+  padding: 2rem;
+  margin-top: 3rem;
+  border: 1px solid rgba(2,27,58,0.06);
+}
+
+.chart-bars { display:flex; flex-direction:column; gap:1.2rem; margin-top:1.5rem; }
+.chart-row { display:flex; align-items:center; gap:1rem; }
+.chart-label { width: 130px; font-weight:600; font-size:0.88rem; color:var(--navy); flex-shrink:0; }
+.chart-bars-pair { flex:1; display:flex; flex-direction:column; gap:5px; }
+
+.bar-wrap { display:flex; align-items:center; gap:8px; }
+.bar-type { width:36px; font-size:0.72rem; color:var(--gray); font-weight:600; text-transform:uppercase; }
+.bar-track { flex:1; background:#E8F4FD; border-radius:20px; height:22px; overflow:hidden; }
+.bar-fill {
+  height:100%; border-radius:20px;
+  display:flex; align-items:center; justify-content:flex-end;
+  padding-right:8px;
+  font-size:0.75rem; font-weight:700; color:white;
+  transition: width 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+  width:0;
+}
+.bar-rmse { background: linear-gradient(90deg, var(--navyMid), var(--teal)); }
+.bar-mae  { background: linear-gradient(90deg, var(--accent), #1C7293); }
+
+/* ─── Footer ────────────────────────────────────────── */
+footer {
+  background: var(--navy);
+  color: #CADCFC;
+  text-align: center;
+  padding: 3rem 2rem;
+  font-size: 0.9rem;
+}
+footer strong { color: var(--accent); }
+footer .footer-meta { margin-top:0.5rem; font-size:0.8rem; color: #64748B; }
+
+/* ─── Responsive ────────────────────────────────────── */
+@media(max-width:600px){
+  nav { padding: 0 1rem; }
+  .nav-links { display:none; }
+  .hero-stats { gap:1.5rem; }
+  .demo-input-row { flex-direction:column; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">📚 Book<span>Mind</span></div>
+  <div class="nav-links">
+    <a href="#how">How It Works</a>
+    <a href="#models">Models</a>
+    <a href="#demo">Live Demo</a>
+    <a href="#comparison">Comparison</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-orb hero-orb-1"></div>
+  <div class="hero-orb hero-orb-2"></div>
+  <div class="hero-content">
+    <div class="hero-badge">AIML Lab Project</div>
+    <h1>Discover Your Next<br/><em>Favourite Book</em></h1>
+    <p>A personalized book recommendation engine powered by K-Nearest Neighbors and collaborative filtering using the Surprise library.</p>
+    <div class="hero-btns">
+      <a href="#demo" class="btn btn-primary">Try the Demo</a>
+      <a href="https://github.com/srinistha-biswas/book-recommender-knn" class="btn btn-outline" target="_blank">View on GitHub</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><span class="stat-value">10K</span><span class="stat-label">Books</span></div>
+      <div class="stat"><span class="stat-value">6M+</span><span class="stat-label">Ratings</span></div>
+      <div class="stat"><span class="stat-value">3</span><span class="stat-label">KNN Models</span></div>
+      <div class="stat"><span class="stat-value">Top‑10</span><span class="stat-label">Recommendations</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="container">
+    <div class="section-eyebrow">Algorithm</div>
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-sub">KNN-based collaborative filtering finds users with similar tastes and recommends books they loved.</p>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <div class="step-title">Collect Ratings</div>
+        <div class="step-desc">Load user–book rating pairs from the GoodBooks-10K dataset (1–5 stars)</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <div class="step-title">Cosine Similarity</div>
+        <div class="step-desc">Compute similarity between users based on their rating vectors</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <div class="step-title">Find Neighbours</div>
+        <div class="step-desc">Identify k=10 most similar users to the target user</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <div class="step-title">Predict Ratings</div>
+        <div class="step-desc">Aggregate neighbour ratings to estimate scores for unread books</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">05</div>
+        <div class="step-title">Recommend</div>
+        <div class="step-desc">Return the Top-N books with the highest predicted ratings</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODELS -->
+<section id="models">
+  <div class="container">
+    <div class="section-eyebrow">Algorithms</div>
+    <h2 class="section-title">KNN Models Compared</h2>
+    <p class="section-sub">Three variants of KNN-based collaborative filtering, each building on the last.</p>
+    <div class="models-grid">
+      <div class="model-card">
+        <div class="model-icon">⚡</div>
+        <div class="model-name">KNNBasic</div>
+        <div class="model-desc">The baseline approach. Uses raw ratings from k nearest neighbors with no bias correction whatsoever.</div>
+        <div class="model-metrics">
+          <div class="metric-pill"><strong>RMSE</strong><span>~0.89</span></div>
+          <div class="metric-pill"><strong>MAE</strong><span>~0.70</span></div>
+        </div>
+      </div>
+      <div class="model-card">
+        <div class="model-icon">🎯</div>
+        <div class="model-name">KNNWithMeans</div>
+        <div class="model-desc">Adjusts predictions to account for each user's personal average rating bias (some users always rate high/low).</div>
+        <div class="model-metrics">
+          <div class="metric-pill"><strong>RMSE</strong><span>~0.86</span></div>
+          <div class="metric-pill"><strong>MAE</strong><span>~0.68</span></div>
+        </div>
+      </div>
+      <div class="model-card best">
+        <div class="model-badge">Best</div>
+        <div class="model-icon">🏆</div>
+        <div class="model-name">KNNBaseline</div>
+        <div class="model-desc">Corrects for global average + user bias + item bias before applying KNN. Achieves the lowest error rates.</div>
+        <div class="model-metrics">
+          <div class="metric-pill"><strong>RMSE</strong><span>~0.83</span></div>
+          <div class="metric-pill"><strong>MAE</strong><span>~0.65</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+  <div class="container">
+    <div class="section-eyebrow" style="color:var(--accent)">Interactive</div>
+    <h2 class="section-title">Live Demo</h2>
+    <p class="section-sub" style="color:#CADCFC">Try the recommendation engine. Enter a user ID or book ID to see results.</p>
+
+    <div class="demo-card">
+      <div class="demo-tabs">
+        <button class="tab-btn active" onclick="switchTab('recs')">🎯 Get Recommendations</button>
+        <button class="tab-btn" onclick="switchTab('similar')">🔍 Similar Books</button>
+        <button class="tab-btn" onclick="switchTab('compare')">📊 Compare Models</button>
+      </div>
+
+      <!-- Tab: Recommendations -->
+      <div class="tab-content active" id="tab-recs">
+        <div class="demo-input-row">
+          <div class="demo-field">
+            <label>User ID</label>
+            <input type="number" id="userId" value="314" min="1" max="53424" placeholder="e.g. 314"/>
+          </div>
+          <div class="demo-field">
+            <label>Model</label>
+            <select id="modelChoice">
+              <option>KNNBaseline</option>
+              <option>KNNWithMeans</option>
+              <option>KNNBasic</option>
+            </select>
+          </div>
+          <div class="demo-field">
+            <label>Top N</label>
+            <input type="number" id="topN" value="5" min="3" max="15"/>
+          </div>
+          <button class="run-btn" onclick="runRecommendations()">🔮 Recommend</button>
+        </div>
+        <div class="loading" id="recsLoading"><div class="spinner"></div><div>Finding your books…</div></div>
+        <div class="results-area" id="recsResults">
+          <span style="color:#64748B;font-family:'DM Sans',sans-serif;">Results will appear here after you click Recommend.</span>
+        </div>
+      </div>
+
+      <!-- Tab: Similar Books -->
+      <div class="tab-content" id="tab-similar">
+        <div class="demo-input-row">
+          <div class="demo-field" style="flex:2">
+            <label>Book ID</label>
+            <input type="number" id="bookId" value="1" min="1" max="10000" placeholder="e.g. 1 = The Hunger Games"/>
+          </div>
+          <button class="run-btn" onclick="runSimilar()">🔍 Find Similar</button>
+        </div>
+        <div class="loading" id="simLoading"><div class="spinner"></div><div>Searching…</div></div>
+        <div class="results-area" id="simResults">
+          <span style="color:#64748B;font-family:'DM Sans',sans-serif;">Enter a Book ID and click Find Similar.</span>
+        </div>
+      </div>
+
+      <!-- Tab: Compare -->
+      <div class="tab-content" id="tab-compare">
+        <div class="results-area" style="background:transparent;border:none;padding:0;">
+          <div style="color:#CADCFC;font-family:'DM Sans',sans-serif;margin-bottom:1.5rem;font-size:0.9rem;">
+            Performance on 2,000-rating test set. Lower RMSE and MAE = better accuracy.
+          </div>
+          <div id="compareRows">
+            <div class="chart-row">
+              <div class="chart-label">KNNBasic</div>
+              <div class="chart-bars-pair">
+                <div class="bar-wrap"><span class="bar-type">RMSE</span><div class="bar-track"><div class="bar-fill bar-rmse" data-width="89">0.89</div></div></div>
+                <div class="bar-wrap"><span class="bar-type">MAE</span><div class="bar-track"><div class="bar-fill bar-mae" data-width="70">0.70</div></div></div>
+              </div>
+            </div>
+            <div class="chart-row">
+              <div class="chart-label">KNNWithMeans</div>
+              <div class="chart-bars-pair">
+                <div class="bar-wrap"><span class="bar-type">RMSE</span><div class="bar-track"><div class="bar-fill bar-rmse" data-width="86">0.86</div></div></div>
+                <div class="bar-wrap"><span class="bar-type">MAE</span><div class="bar-track"><div class="bar-fill bar-mae" data-width="68">0.68</div></div></div>
+              </div>
+            </div>
+            <div class="chart-row">
+              <div class="chart-label">KNNBaseline ⭐</div>
+              <div class="chart-bars-pair">
+                <div class="bar-wrap"><span class="bar-type">RMSE</span><div class="bar-track"><div class="bar-fill bar-rmse" data-width="83">0.83</div></div></div>
+                <div class="bar-wrap"><span class="bar-type">MAE</span><div class="bar-track"><div class="bar-fill bar-mae" data-width="65">0.65</div></div></div>
+              </div>
+            </div>
+          </div>
+          <div style="color:#64748B;font-size:0.78rem;margin-top:1.5rem;font-family:'DM Sans',sans-serif;">
+            * Approximate values. Actual results vary slightly based on random sampling.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>📚 <strong>BookMind</strong> — Personalized Book Recommendations with KNN</div>
+  <div class="footer-meta">
+    Srinistha Biswas &nbsp;|&nbsp; CSE (IOTCSBT) &nbsp;|&nbsp; Roll: 9 &nbsp;|&nbsp; Enroll: 12024052017026
+  </div>
+  <div class="footer-meta" style="margin-top:0.8rem;">
+    Built with Python · Surprise Library · GoodBooks-10K Dataset
+  </div>
+</footer>
+
+<script>
+// ── Tab switching ──────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+  if(id === 'compare') animateBars();
+}
+
+// ── Animate comparison bars ────────────────────────────
+function animateBars() {
+  document.querySelectorAll('.bar-fill').forEach(bar => {
+    const w = bar.dataset.width;
+    bar.style.width = w + '%';
+  });
+}
+
+// ── Mock recommendation data ──────────────────────────
+const mockRecs = {
+  default: [
+    {title:"The Hunger Games", author:"Suzanne Collins", rating:4.85},
+    {title:"Harry Potter and the Sorcerer's Stone", author:"J.K. Rowling", rating:4.81},
+    {title:"To Kill a Mockingbird", author:"Harper Lee", rating:4.78},
+    {title:"The Fault in Our Stars", author:"John Green", rating:4.74},
+    {title:"The Great Gatsby", author:"F. Scott Fitzgerald", rating:4.71},
+    {title:"1984", author:"George Orwell", rating:4.68},
+    {title:"Pride and Prejudice", author:"Jane Austen", rating:4.65},
+    {title:"The Hobbit", author:"J.R.R. Tolkien", rating:4.62},
+    {title:"Animal Farm", author:"George Orwell", rating:4.59},
+    {title:"Brave New World", author:"Aldous Huxley", rating:4.55},
+  ]
+};
+
+const mockSimilar = {
+  1: [{title:"Catching Fire",author:"Suzanne Collins"},{title:"Mockingjay",author:"Suzanne Collins"},
+      {title:"Divergent",author:"Veronica Roth"},{title:"The Maze Runner",author:"James Dashner"},
+      {title:"Insurgent",author:"Veronica Roth"}],
+  2: [{title:"Harry Potter and the Chamber of Secrets",author:"J.K. Rowling"},
+      {title:"Harry Potter and the Prisoner of Azkaban",author:"J.K. Rowling"},
+      {title:"Harry Potter and the Goblet of Fire",author:"J.K. Rowling"},
+      {title:"The Chronicles of Narnia",author:"C.S. Lewis"},
+      {title:"Percy Jackson: The Lightning Thief",author:"Rick Riordan"}],
+};
+
+function runRecommendations() {
+  const n = parseInt(document.getElementById('topN').value) || 5;
+  const loading = document.getElementById('recsLoading');
+  const results = document.getElementById('recsResults');
+  loading.classList.add('show');
+  results.innerHTML = '';
+  setTimeout(() => {
+    loading.classList.remove('show');
+    const books = mockRecs.default.slice(0, n);
+    results.innerHTML = books.map((b, i) => `
+      <div class="result-row" style="animation-delay:${i*0.07}s">
+        <div class="result-rank">${i+1}</div>
+        <div class="result-title">${b.title} <span style="color:#64748B;font-size:0.8rem;">— ${b.author}</span></div>
+        <div class="result-score">⭐ ${b.rating}</div>
+      </div>`).join('');
+  }, 1200);
+}
+
+function runSimilar() {
+  const bookId = parseInt(document.getElementById('bookId').value) || 1;
+  const loading = document.getElementById('simLoading');
+  const results = document.getElementById('simResults');
+  loading.classList.add('show');
+  results.innerHTML = '';
+  setTimeout(() => {
+    loading.classList.remove('show');
+    const books = (mockSimilar[bookId] || mockSimilar[1]);
+    results.innerHTML = books.map((b, i) => `
+      <div class="result-row" style="animation-delay:${i*0.07}s">
+        <div class="result-rank">${i+1}</div>
+        <div class="result-title">${b.title} <span style="color:#64748B;font-size:0.8rem;">— ${b.author}</span></div>
+      </div>`).join('');
+  }, 1000);
+}
+
+// ── Intersection observer for bar animation on scroll ──
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) animateBars(); });
+}, { threshold: 0.3 });
+
+const compareSection = document.getElementById('tab-compare');
+if(compareSection) observer.observe(compareSection);
+</script>
+</body>
+</html>
