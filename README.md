@@ -113,18 +113,6 @@ User Ratings → Cosine Similarity → KNN (k=10) → Predict Ratings → Top-N 
 
 ---
 
-## 🏫 Academic Details
-
-| Field | Details |
-|-------|---------|
-| **Name** | Srinistha Biswas |
-| **Department** | CSE (IOTCSBT) |
-| **Roll No.** | 9 |
-| **Enrollment No.** | 12024052017026 |
-| **Subject** | AIML Lab |
-| **Tools** | Python, Surprise, Google Colab, Streamlit |
-
----
 
 ## 📄 License
 
