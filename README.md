@@ -1,7 +1,7 @@
 # 📚 BookMind — Personalized Book Recommendations with KNN
 
 > A personalized book recommendation system built using K-Nearest Neighbors (KNN) collaborative filtering via the **Surprise** library.
-
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://book-recommender-knn-mks6vospmwx8wrz2byypul.streamlit.app/)
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red?logo=streamlit)
 ![Surprise](https://img.shields.io/badge/Surprise-KNN-green)
